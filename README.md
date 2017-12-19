@@ -16,7 +16,8 @@ The script code can be found in the root directory of the repository, in `valida
 
 * Latest version of Node.js installed
 * `csvtojson` NPM package (included in package.json)
-* `mocha` and `chai` for running tests
+* `json-to-csv` NPM package (included in package.json)
+* `mocha` and `chai` for running tests (included in package.json)
 
 ## How To Run
 
