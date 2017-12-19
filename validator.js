@@ -10,12 +10,14 @@
 */
 
 const csvFilePath = "./tactic.csv";
+const csvOutputPath = "summary.csv";
 const csv = require("csvtojson");
+const jsontoCSV = require("json-to-csv");
 const http = require("http");
 const https = require("https");
 const jsonArr = [];
 let client = http;
-
+/** Conversion from CSV to JSON */
 console.log("Converting from CSV to JSON...");
 // Converting CSV to array of JSON objects
 csv({ delimiter: "," })
@@ -23,9 +25,10 @@ csv({ delimiter: "," })
   .on("json", jsonObj => {
     jsonArr.push(jsonObj);
   })
-
+  /** Pixel URL Cleaning */
   .on("done", error => {
     console.log("Conversion finished. Cleaning JSON data...");
+
     // Promise that cleans the 'impression_pixel_json' attribute of each object in the array
     let myPromise = new Promise((resolve, reject) => {
       jsonArr.forEach((itm, i) => {
@@ -51,14 +54,18 @@ csv({ delimiter: "," })
       });
       resolve(jsonArr);
     });
-    // When cleaning is finished, begin validating each pixel and populating summary numbers
+
+    /** Pixel Validation with HTTP GET */
     myPromise.then(cleanData => {
       console.log("Cleaning finished. Validating pixels...");
 
       let okStatusCount = 0; // # of valid pixels
-      let failedStatusCount = 0; // # of invalid/error throwing pixels
-      let failedPixelArray = []; // list of invalid/error throwing pixels with their tactic ID, URL, and status
+      let failedStatusCount = 0; // # of invalid pixels
+      let errorCount = 0; // # of errors thrown while validating a pixel
+      let failedPixelArray = []; // list of invalid pixels with their tactic ID and URL
+      let errorArray = []; // list of error throwing pixels with their tactic ID, URL, and error message
 
+      // TODO - double for loop for the GET requests takes a long time to complete...any better way to do this?
       cleanData.forEach((itm, i) => {
         // Skip again if there is no pixel URL
         if (
@@ -69,8 +76,9 @@ csv({ delimiter: "," })
         } else {
           // Hold current tactic ID in this variable for recording any potential failed pixels
           let currentTacticID = itm.tactic_id;
+
           itm.impression_pixel_json.forEach((url, i) => {
-            // First check if the pixel URL is HTTPS or HTTP, and use protocol accordingly
+            // First check if the pixel URL is HTTPS or HTTP, and use appropriate protocol
             if (url.indexOf("https") === 0) {
               client = https;
             } else {
@@ -90,37 +98,65 @@ csv({ delimiter: "," })
                 // and push a new object into the failed pixels list containing the current tactic ID, pixel URL, and status code
                 failedStatusCount++;
                 failedPixelArray.push({
-                  tactic_id: currentTacticID,
-                  pixel_url: url,
-                  status: resp.statusCode
+                  failed_tactic_id: currentTacticID,
+                  failed_pixel_url: url
                 });
                 console.log(failedPixelArray); // logging this temporarily for debugging
               }
             });
+
             // If there is an error thrown during the request, increment the failed pixel count,
             // and push a new object into the failed pixels list containing the current tactic ID, pixel URL, and error message
             req.on("error", error => {
               //console.log(error);
-              failedStatusCount++;
-              failedPixelArray.push({
-                tactic_id: currentTacticID,
-                pixel_url: url,
-                status: error
+              errorCount++;
+              errorArray.push({
+                error_tactic_id: currentTacticID,
+                error_pixel_url: url,
+                error_msg: error
               });
+              console.log(errorArray);
             });
 
-            req.end();
+            /** Printing out Summary */
+            req.end(data => {
+              // Print out the summary of results
+              console.log(
+                "Validation finished. Here's a brief summary of the results:"
+              );
+              console.log(
+                "# of Valid Pixels (OK Status code): " +
+                  okStatusCount +
+                  "\n# of Invalid Pixels (Failed status code or Error thrown during request): " +
+                  failedStatusCount +
+                  "\n# of Errors Thrown During Pixel Validation: " +
+                  errorCount
+              );
+
+              // Print out full summary of results to root path in new CSV file, 'summary.csv'
+              console.log("Printing out full summary in new CSV file...");
+              let csvArray = [];
+
+              csvArray.push(
+                { valid_pixel_count: okStatusCount },
+                { failed_pixel_count: failedStatusCount }
+              );
+              csvArray.push.apply(csvArray, failedPixelArray);
+              csvArray.push.apply(csvArray, errorArray);
+
+              jsonToCSV(o, csvOutputPath)
+                .then(() => {
+                  console.log(
+                    "CSV summary complete. It can be found in 'summary.csv'"
+                  );
+                })
+                .catch(error => {
+                  // handle error
+                  console.log("Error: CSV conversion could not be completed.");
+                });
+            });
           });
         }
       });
-      // Print out the summary of results
-      console.log(
-        "Summary:\n# of valid pixels (OK Status code): " +
-          okStatusCount +
-          "\n# of invalid pixels (Failed status code or Error thrown during request): " +
-          failedStatusCount +
-          "\nList of Failed Pixels: " +
-          failedPixelArray
-      );
     });
   });
