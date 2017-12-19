@@ -4,14 +4,17 @@ This is a Node.js command line script that ingests a CSV file and validates all 
 
 It then prints out a summary of the results to the console:
 
-* Number of OK responses (2XX and 3XX status codes)
-* Number of failed responses (4XX and 5XX status codes)
-* List of tactics that failed (ID and URL)
+* Number of valid pixels with OK responses (2XX and 3XX status codes)
+* Number of invalid pixels with failed responses (4XX and 5XX status codes, errors thrown for no server response)
+* List of pixels that failed (tactic ID, pixel URL, and status code/error thrown)
+
+The script code can be found in the root directory of the repository, in `validator.js`.
 
 ## Dependencies
 
 * Latest version of Node.js installed
 * `csvtojson` NPM package (included in package.json)
+* `mocha` and `chai` for running tests
 
 ## How To Run
 
